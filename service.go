@@ -2,39 +2,54 @@ package napodate
 
 import (
 	"context"
-	"time"
+	"encoding/json"
+	"net/http"
 )
 
-// Service provides some "date capabilities" to your application
-type Service interface {
-	Status(ctx context.Context) (string, error)
-	Get(ctx context.Context) (string, error)
-	Validate(ctx context.Context, date string) (bool, error)
+// In the first part of the file we are mapping requests and responses to their JSON payload.
+type getRequest struct{}
+
+type getResponse struct {
+	Date string `json:"date"`
+	Err  string `json:"err,omitempty"`
 }
 
-type dateService struct{}
-
-// NewService makes a new Service.
-func NewService() Service {
-	return dateService{}
+type validateRequest struct {
+	Date string `json:"date"`
 }
 
-// Status only tell us that our service is ok!
-func (dateService) Status(ctx context.Context) (string, error) {
-	return "ok", nil
+type validateResponse struct {
+	Valid bool   `json:"valid"`
+	Err   string `json:"err,omitempty"`
 }
 
-// Get will return today's date
-func (dateService) Get(ctx context.Context) (string, error) {
-	now := time.Now()
-	return now.Format("02/01/2006"), nil
+type statusRequest struct{}
+
+type statusResponse struct {
+	Status string `json:"status"`
 }
 
-// Validate will check if the date today's date
-func (dateService) Validate(ctx context.Context, date string) (bool, error) {
-	_, err := time.Parse("02/01/2006", date)
+// In the second part we will write "decoders" for our incoming requests
+func decodeGetRequest(ctx context.Context, r *http.Request) (interface{}, error) {
+	var req getRequest
+	return req, nil
+}
+
+func decodeValidateRequest(ctx context.Context, r *http.Request) (interface{}, error) {
+	var req validateRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	return true, nil
+	return req, nil
+}
+
+func decodeStatusRequest(ctx context.Context, r *http.Request) (interface{}, error) {
+	var req statusRequest
+	return req, nil
+}
+
+// Last but not least, we have the encoder for the response output
+func encodeResponse(ctx context.Context, w http.ResponseWriter, response interface{}) error {
+	return json.NewEncoder(w).Encode(response)
 }

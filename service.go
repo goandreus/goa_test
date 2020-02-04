@@ -2,54 +2,41 @@ package napodate
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
+
+	httptransport "github.com/go-kit/kit/transport/http"
+	"github.com/gorilla/mux"
 )
 
-// In the first part of the file we are mapping requests and responses to their JSON payload.
-type getRequest struct{}
+// NewHTTPServer is a good little server
+func NewHTTPServer(ctx context.Context, endpoints Endpoints) http.Handler {
+	r := mux.NewRouter()
+	r.Use(commonMiddleware) // @see https://stackoverflow.com/a/51456342
 
-type getResponse struct {
-	Date string `json:"date"`
-	Err  string `json:"err,omitempty"`
+	r.Methods("GET").Path("/status").Handler(httptransport.NewServer(
+		endpoints.StatusEndpoint,
+		decodeStatusRequest,
+		encodeResponse,
+	))
+
+	r.Methods("GET").Path("/get").Handler(httptransport.NewServer(
+		endpoints.GetEndpoint,
+		decodeGetRequest,
+		encodeResponse,
+	))
+
+	r.Methods("POST").Path("/validate").Handler(httptransport.NewServer(
+		endpoints.ValidateEndpoint,
+		decodeValidateRequest,
+		encodeResponse,
+	))
+
+	return r
 }
 
-type validateRequest struct {
-	Date string `json:"date"`
-}
-
-type validateResponse struct {
-	Valid bool   `json:"valid"`
-	Err   string `json:"err,omitempty"`
-}
-
-type statusRequest struct{}
-
-type statusResponse struct {
-	Status string `json:"status"`
-}
-
-// In the second part we will write "decoders" for our incoming requests
-func decodeGetRequest(ctx context.Context, r *http.Request) (interface{}, error) {
-	var req getRequest
-	return req, nil
-}
-
-func decodeValidateRequest(ctx context.Context, r *http.Request) (interface{}, error) {
-	var req validateRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		return nil, err
-	}
-	return req, nil
-}
-
-func decodeStatusRequest(ctx context.Context, r *http.Request) (interface{}, error) {
-	var req statusRequest
-	return req, nil
-}
-
-// Last but not least, we have the encoder for the response output
-func encodeResponse(ctx context.Context, w http.ResponseWriter, response interface{}) error {
-	return json.NewEncoder(w).Encode(response)
+func commonMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "application/json")
+		next.ServeHTTP(w, r)
+	})
 }
